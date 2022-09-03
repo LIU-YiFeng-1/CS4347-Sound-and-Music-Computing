@@ -86,6 +86,7 @@ class SingingDataset(Dataset):
         frame_size = 1024.0 / 44100.0
         is_singing = False
         onset_count = 0
+        offset_count = 0
 
         # label formart: [0/1, 0/1, octave_class_num, pitch_class_num]
         # the total number of frames in the respective music
@@ -101,76 +102,33 @@ class SingingDataset(Dataset):
                 is_singing = True
                 label[0] = 1
                 label[1] = 0
-                #self.__setlabel__(current_note_num=cur_note_number, octave_class_num=label[2] , pitch_class_num=label[3], note_start=note_start)
-                if cur_note_number in range(36,47):
-                    label[2] = 0 # 2nd octave
-                    label[3] = cur_note_number - note_start
-                elif cur_note_number in range(48,59):
-                    label[2] = 1 # 3rd octave
-                    label[3] = cur_note_number - note_start - 12
-                elif cur_note_number in range(60,71):
-                    label[2] = 2 # 4th octave
-                    label[3] = cur_note_number - note_start - 24
-                elif cur_note_number in range(72,83):
-                    label[2] = 3 # 5th octave
-                    label[3] = cur_note_number - note_start - 36
-                else:
-                    label[2] = 4 # unknown (silence)
-                    label[3] = 12 
+
                 onset_count += 1
-                print("\n the curtime == starting_time \n")
+                print("\n the onset count: ")
                 print(onset_count)
 
             # condition for voiced frame
             elif cur_time < ending_time and cur_time > starting_time and is_singing == True:
                 label[0] = 0
                 label[1] = 0
-                #self.__setlabel__(current_note_num=cur_note_number, octave_class_num=label[2] , pitch_class_num=label[3], note_start=note_start)
-                if cur_note_number in range(36,47):
-                    label[2] = 0 # 2nd octave
-                    label[3] = cur_note_number - note_start
-                elif cur_note_number in range(48,59):
-                    label[2] = 1 # 3rd octave
-                    label[3] = cur_note_number - note_start - 12
-                elif cur_note_number in range(60,71):
-                    label[2] = 2 # 4th octave
-                    label[3] = cur_note_number - note_start - 24
-                elif cur_note_number in range(72,83):
-                    label[2] = 3 # 5th octave
-                    label[3] = cur_note_number - note_start - 36
-                else:
-                    label[2] = 4 # unknown (silence)
-                    label[3] = 12                 
-                print()
+       
+                print("\n the voiced singing...... \n")
 
             # condition for off set frame
             elif cur_time > ending_time and is_singing == True:
                 is_singing = False
                 label[0] = 0
                 label[1] = 1
-                #self.__setlabel__(current_note_num=cur_note_number, octave_class_num=label[2] , pitch_class_num=label[3], note_start=note_start)
-                if cur_note_number in range(36,47):
-                    label[2] = 0 # 2nd octave
-                    label[3] = cur_note_number - note_start
-                elif cur_note_number in range(48,59):
-                    label[2] = 1 # 3rd octave
-                    label[3] = cur_note_number - note_start - 12
-                elif cur_note_number in range(60,71):
-                    label[2] = 2 # 4th octave
-                    label[3] = cur_note_number - note_start - 24
-                elif cur_note_number in range(72,83):
-                    label[2] = 3 # 5th octave
-                    label[3] = cur_note_number - note_start - 36
-                else:
-                    label[2] = 4 # unknown (silence)
-                    label[3] = 12 
-                #try:
-                cur_note += 1
-                cur_note_onset = annotation_data[cur_note][0]
-                cur_note_offset = annotation_data[cur_note][1]
-                cur_note_number = annotation_data[cur_note][2]
-                #except IndexError:
-                   # pass
+                offset_count += 1
+                print("\n the offset count: ")
+                print(offset_count)
+                try:
+                    cur_note += 1
+                    cur_note_onset = annotation_data[cur_note][0]
+                    cur_note_offset = annotation_data[cur_note][1]
+                    cur_note_number = annotation_data[cur_note][2]
+                except IndexError:
+                    pass
             # conditon for silent frame
             else:
                 is_singing = False
@@ -182,7 +140,7 @@ class SingingDataset(Dataset):
             """
 
             new_label.append(label)
-            print(label)
+            #print(label)
 
         return np.array(new_label)
 
