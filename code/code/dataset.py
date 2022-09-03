@@ -1,4 +1,4 @@
-from turtle import onscreenclick
+from math import fabs
 import torch
 from torch.utils.data import Dataset
 
@@ -9,6 +9,7 @@ import librosa
 import argparse
 import numpy as np
 from tqdm import tqdm
+from decimal import ROUND_HALF_UP, Decimal
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -50,7 +51,7 @@ class SingingDataset(Dataset):
             cqt_data = features[the_dir]
             annotation_data = annotations[the_dir]
             frame_num, channel_num, cqt_size = cqt_data.shape[0], cqt_data.shape[1], cqt_data.shape[2]
-
+            
             label_data = self.get_labels(annotation_data, frame_num)
             zero_padding = torch.zeros((channel_num, cqt_size), dtype=torch.float)
 
@@ -83,107 +84,84 @@ class SingingDataset(Dataset):
         # pitch_class ranging from 0 to 12, pitch class 0 to 11: pitch C to B, pitch class 12: unknown class(silence)
         note_start = 36
         frame_size = 1024.0 / 44100.0
-        oneset_count = 0
+        is_singing = False
+        is_terminated = False
+        onset_count = 0
         offset_count = 0
-        # label formart: [0/1, 0/1, octave_class_num, pitch_class_num]
-        for i in range(frame_num):
-            cur_time = i * frame_size
-            label = [0, 0, 0, 0] # is_onset, is_offset, octave_class, pitch_class
-            
-            """ YOUR CODE HERE
-            Hint: You need to consider four situations.
-            1)For the silent frame 2) For the onset frame 3) For the offset frame 4) For the voiced frame
-            """
-            #to determine whether each frame contains the onset or offset of the note
-            #divide the onset in sec by frame size to get frame id
-            #from the json file the first song, the first singing voice note starts at 17 sec, ie before 
-            #17s, can consider as silent frame ie [0,0,4,12]
-            #frame num for example is 10364
-            
-            starting = int(cur_note_onset/frame_size)
-            ending = int(cur_note_offset/frame_size)
 
-            if i == starting:
-                oneset_count += 1
+        # label formart: [0/1, 0/1, octave_class_num, pitch_class_num]
+        # the total number of frames in the respective music
+        for i in range(frame_num):
+            cur_time = i * frame_size # current time in respect to the frame number
+            #cur_time = round(cur_time, 1)
+            label = [0, 0, 0, 0] # is_onset, is_offset, octave_class_num, pitch_class_num
+            starting_time = cur_note_onset
+            ending_time = cur_note_offset
+            
+            # condition for on set frame
+            if cur_time > starting_time and is_singing == False and is_terminated == False:
+                is_singing = True
                 label[0] = 1
                 label[1] = 0
-                if cur_note_number in range(36,47):
-                    label[2] = 0 # 2nd octave
-                    label[3] = cur_note_number - note_start
-                elif cur_note_number in range(48,59):
-                    label[2] = 1 # 3rd octave
-                    label[3] = cur_note_number - note_start - 12
-                elif cur_note_number in range(60,71):
-                    label[2] = 2 # 4th octave
-                    label[3] = cur_note_number - note_start - 24
-                elif cur_note_number in range(72,83):
-                    label[2] = 3 # 5th octave
-                    label[3] = cur_note_number - note_start - 36
-                else:
-                    label[2] = 4 # unknown (silence)
-                    label[3] = 12 
-                print("the onset count is: ")
-                print(oneset_count)
-                #print("\n" + str(i) + str(label))
-                #print("\n" + str(cur_note))
-            elif i > starting and i < ending:
+
+                onset_count += 1
+                print("\n the onset count: ")
+                print(onset_count)
+
+            # condition for voiced frame
+            elif cur_time < ending_time and cur_time > starting_time and is_singing == True and is_terminated == False:
                 label[0] = 0
                 label[1] = 0
-                if cur_note_number in range(36,47):
-                    label[2] = 0 # 2nd octave
-                    label[3] = cur_note_number - note_start
-                elif cur_note_number in range(48,59):
-                    label[2] = 1 # 3rd octave
-                    label[3] = cur_note_number - note_start - 12
-                elif cur_note_number in range(60,71):
-                    label[2] = 2 # 4th octave
-                    label[3] = cur_note_number - note_start - 24
-                elif cur_note_number in range(72,83):
-                    label[2] = 3 # 5th octave
-                    label[3] = cur_note_number - note_start - 36
-                else:
-                    label[2] = 4 # unknown (silence)
-                    label[3] = 12 
-                #print("\n" + str(i) + str(label))
-                #print("\n" + str(cur_note))
-            elif i == ending:
-                offset_count += 1
+       
+                print("\n the voiced singing\n")
+
+            # condition for off set frame
+            elif cur_time > ending_time and is_singing == True and is_terminated == False:
+                is_singing = False
                 label[0] = 0
                 label[1] = 1
-                if cur_note_number in range(36,47):
-                    label[2] = 0 # 2nd octave
-                    label[3] = cur_note_number - note_start
-                elif cur_note_number in range(48,59):
-                    label[2] = 1 # 3rd octave
-                    label[3] = cur_note_number - note_start - 12
-                elif cur_note_number in range(60,71):
-                    label[2] = 2 # 4th octave
-                    label[3] = cur_note_number - note_start - 24
-                elif cur_note_number in range(72,83):
-                    label[2] = 3 # 5th octave
-                    label[3] = cur_note_number - note_start - 36
-                else:
-                    label[2] = 4 # unknown (silence)
-                    label[3] = 12 
+                offset_count += 1
+                print("\n the offset count: ")
+                print(offset_count)
                 try:
                     cur_note += 1
                     cur_note_onset = annotation_data[cur_note][0]
                     cur_note_offset = annotation_data[cur_note][1]
                     cur_note_number = annotation_data[cur_note][2]
                 except IndexError:
+                    is_terminated = True
                     pass
-                #print("\n" + str(i) + str(label))
-                #print("\n" + str(cur_note))
-                print("the offset count is: ")
-                print(offset_count)
+            # conditon for silent frame
             else:
-                label = [0,0,4,12]
+                is_singing = False
+                print("\n ........................ \n")
+            
+            """ YOUR CODE HERE
+            Hint: You need to consider four situations.
+            1)For the silent frame 2) For the onset frame 3) For the offset frame 4) For the voiced frame
+            """
 
-            #print("\n" + str(i) + str(label))
-            #print("\n" + str(cur_note))
             new_label.append(label)
+            #print(label)
 
         return np.array(new_label)
+
+    def __setlabel__(self, current_note_num, octave_class_num, pitch_class_num, note_start):
+        if current_note_num in range(36,47):
+            octave_class_num = 0 # 2nd octave
+            pitch_class_num = current_note_num - note_start
+        elif current_note_num in range(48,59):
+            octave_class_num = 1 # 3rd octave
+            pitch_class_num = current_note_num - note_start - 12
+        elif current_note_num in range(60,71):
+            octave_class_num = 2 # 4th octave
+            pitch_class_num = current_note_num - note_start - 24
+        elif current_note_num in range(72,83):
+            octave_class_num = 3 # 5th octave
+            pitch_class_num = current_note_num - note_start - 36
+        else:
+            octave_class_num = 4 # unknown (silence)
+            pitch_class_num = 12 
 
     def __getitem__(self, idx):
         return self.data[idx]
@@ -260,6 +238,5 @@ if __name__ == "__main__":
         with open(save_path, 'wb') as f:
             pickle.dump(dataset, f)
         print('Dataset generated at {}.'.format(save_path))
-
 
     
