@@ -103,26 +103,70 @@ class SingingDataset(Dataset):
                 is_singing = True
                 label[0] = 1
                 label[1] = 0
+                if cur_note_number in range(36,47):
+                    label[2] = 0 # 2nd octave
+                    label[3] = cur_note_number - note_start
+                elif cur_note_number in range(48,59):
+                    label[2] = 1 # 3rd octave
+                    label[3] = cur_note_number - note_start - 12
+                elif cur_note_number in range(60,71):
+                    label[2] = 2 # 4th octave
+                    label[3] = cur_note_number - note_start - 24
+                elif cur_note_number in range(72,83):
+                    label[2] = 3 # 5th octave
+                    label[3] = cur_note_number - note_start - 36
+                else:
+                    label[2] = 4 # unknown (silence)
+                    label[3] = 12 
 
-                onset_count += 1
-                print("\n the onset count: ")
-                print(onset_count)
+                # onset_count += 1
+                # print("\n the onset count: ")
+                # print(onset_count)
 
             # condition for voiced frame
             elif cur_time < ending_time and cur_time > starting_time and is_singing == True and is_terminated == False:
                 label[0] = 0
                 label[1] = 0
-       
-                print("\n the voiced singing\n")
+                if cur_note_number in range(36,47):
+                    label[2] = 0 # 2nd octave
+                    label[3] = cur_note_number - note_start
+                elif cur_note_number in range(48,59):
+                    label[2] = 1 # 3rd octave
+                    label[3] = cur_note_number - note_start - 12
+                elif cur_note_number in range(60,71):
+                    label[2] = 2 # 4th octave
+                    label[3] = cur_note_number - note_start - 24
+                elif cur_note_number in range(72,83):
+                    label[2] = 3 # 5th octave
+                    label[3] = cur_note_number - note_start - 36
+                else:
+                    label[2] = 4 # unknown (silence)
+                    label[3] = 12 
+                #print("\n the voiced singing\n")
 
             # condition for off set frame
             elif cur_time > ending_time and is_singing == True and is_terminated == False:
                 is_singing = False
                 label[0] = 0
                 label[1] = 1
-                offset_count += 1
-                print("\n the offset count: ")
-                print(offset_count)
+                if cur_note_number in range(36,47):
+                    label[2] = 0 # 2nd octave
+                    label[3] = cur_note_number - note_start
+                elif cur_note_number in range(48,59):
+                    label[2] = 1 # 3rd octave
+                    label[3] = cur_note_number - note_start - 12
+                elif cur_note_number in range(60,71):
+                    label[2] = 2 # 4th octave
+                    label[3] = cur_note_number - note_start - 24
+                elif cur_note_number in range(72,83):
+                    label[2] = 3 # 5th octave
+                    label[3] = cur_note_number - note_start - 36
+                else:
+                    label[2] = 4 # unknown (silence)
+                    label[3] = 12 
+                #offset_count += 1
+                #print("\n the offset count: ")
+                #print(offset_count)
                 try:
                     cur_note += 1
                     cur_note_onset = annotation_data[cur_note][0]
@@ -134,15 +178,16 @@ class SingingDataset(Dataset):
             # conditon for silent frame
             else:
                 is_singing = False
-                print("\n ........................ \n")
+                label = [0,0,4,12]
+                # print("\n ........................ \n")
             
             """ YOUR CODE HERE
             Hint: You need to consider four situations.
             1)For the silent frame 2) For the onset frame 3) For the offset frame 4) For the voiced frame
             """
-
+            print("\n" + str(i) + str(label))
+            print("\n" + str(cur_note))
             new_label.append(label)
-            #print(label)
 
         return np.array(new_label)
 
