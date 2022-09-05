@@ -74,12 +74,63 @@ class AST_Model:
 
         start_time = time.time()
         best_model_id = -1
+        num_batches = 0
         min_valid_loss = 10000
         epoch_num = learning_params['epoch']
         valid_every_k_epoch = learning_params['valid_freq']
 
         # Start training 
         print('Start training...')
+
+        for epoch in range(1, learning_params['epoch']+1):
+            self.model.train()
+            total_training_loss = 0
+            total_training_split_loss = np.zeros(4)
+            num_batche = 0
+            # batch_idx is the feature and batch is the label
+            for feature, label in trainset_loader:
+                # Parse batch data
+                input_tensor = feature[0].to(self.device)
+                label = label.to(self.device)
+
+                print("the input tensor/feature is: \n")
+                print(input_tensor)
+
+                print("the label is: \n")
+                print(label)
+                # Forward pass
+                predicted = self.model(input_tensor)
+
+                print("the predicted is: \n")
+                print(predicted)
+
+                # Loss computing
+                total_training_split_loss[0] = onset_criterion(predicted, label[:,0])
+                total_training_split_loss[1] = offset_criterion(predicted, label[:,1])
+                total_training_split_loss[2] = octave_criterion(predicted, label[:,2])
+                total_training_split_loss[3] = pitch_criterion(predicted, label[:,3])
+
+                # Backward pass
+                optimizer.zero_grad()
+                total_training_split_loss[0].backware(retain_graph = True) #on_set
+                total_training_split_loss[1].backward(retain_graph = True) #off_set
+                total_training_split_loss[2].backward(retain_graph = True) #octave
+                total_training_split_loss[3].backward() #pitch
+                optimizer.step()
+
+                # Accuracy computing
+                total_training_loss += np.sum(total_training_split_loss)
+                num_batches += 1
+                print("the num_batches is: " + str(num_batches))
+                print("the total_training_lost is: " + str(total_training_loss))
+            
+            self.model.eval()
+            for feature, label in validset_loader:
+                input_tensor = feature[0].to(self.device)
+            
+            total_loss = total_training_loss / num_batches
+            print("the total_loss is: " + str(total_loss))
+        
 
         """ YOUR CODE HERE
         Hint: 
@@ -90,7 +141,10 @@ class AST_Model:
            may help you monitor the training process and understand it better.
         """
         
-
+        if epoch % 1 == 0 :
+            print(' ')
+            print('epoch=',epoch, '\t loss=', total_loss )
+            
                 
         print('Training done in {:.1f} minutes.'.format((time.time()-start_time)/60))
         return best_model_id
