@@ -15,6 +15,7 @@ from tqdm import tqdm
 from model import BaseNN
 from dataset import SingingDataset
 
+import utils
 
 FRAME_LENGTH = librosa.frames_to_time(1, sr=44100, hop_length=1024)
 
@@ -41,7 +42,7 @@ class AST_Model:
             os.mkdir(save_model_dir)
 
         # Load dataset
-        print('Loading datasets...')
+        print('Loading datasets...version_new')
         with open(trainset_path, 'rb') as f:
             trainset = pickle.load(f)
         with open(validset_path, 'rb') as f:
@@ -58,7 +59,7 @@ class AST_Model:
 
         validset_loader = DataLoader(
             validset,
-            batch_size=1,
+            batch_size=50,
             num_workers=0,
             pin_memory=True,
             shuffle=False,
@@ -74,63 +75,12 @@ class AST_Model:
 
         start_time = time.time()
         best_model_id = -1
-        num_batches = 0
         min_valid_loss = 10000
         epoch_num = learning_params['epoch']
         valid_every_k_epoch = learning_params['valid_freq']
 
         # Start training 
         print('Start training...')
-
-        for epoch in range(1, learning_params['epoch']+1):
-            self.model.train()
-            total_training_loss = 0
-            total_training_split_loss = np.zeros(4)
-            num_batche = 0
-            # batch_idx is the feature and batch is the label
-            for feature, label in trainset_loader:
-                # Parse batch data
-                input_tensor = feature[0].to(self.device)
-                label = label.to(self.device)
-
-                print("the input tensor/feature is: \n")
-                print(input_tensor)
-
-                print("the label is: \n")
-                print(label)
-                # Forward pass
-                predicted = self.model(input_tensor)
-
-                print("the predicted is: \n")
-                print(predicted)
-
-                # Loss computing
-                total_training_split_loss[0] = onset_criterion(predicted, label[:,0])
-                total_training_split_loss[1] = offset_criterion(predicted, label[:,1])
-                total_training_split_loss[2] = octave_criterion(predicted, label[:,2])
-                total_training_split_loss[3] = pitch_criterion(predicted, label[:,3])
-
-                # Backward pass
-                optimizer.zero_grad()
-                total_training_split_loss[0].backware(retain_graph = True) #on_set
-                total_training_split_loss[1].backward(retain_graph = True) #off_set
-                total_training_split_loss[2].backward(retain_graph = True) #octave
-                total_training_split_loss[3].backward() #pitch
-                optimizer.step()
-
-                # Accuracy computing
-                total_training_loss += np.sum(total_training_split_loss)
-                num_batches += 1
-                print("the num_batches is: " + str(num_batches))
-                print("the total_training_lost is: " + str(total_training_loss))
-            
-            self.model.eval()
-            for feature, label in validset_loader:
-                input_tensor = feature[0].to(self.device)
-            
-            total_loss = total_training_loss / num_batches
-            print("the total_loss is: " + str(total_loss))
-        
 
         """ YOUR CODE HERE
         Hint: 
@@ -140,15 +90,116 @@ class AST_Model:
         4) Printing out some necessary statistics, such as training loss of each sub-task, 
            may help you monitor the training process and understand it better.
         """
-        
-        if epoch % 1 == 0 :
-            print(' ')
-            print('epoch=',epoch, '\t loss=', total_loss )
-            
-                
-        print('Training done in {:.1f} minutes.'.format((time.time()-start_time)/60))
-        return best_model_id
+        best_model = 1000
+        train_msg = ""
+        validate_msg = ""
+        for epoch in range(1, epoch_num+1):
+            self.model.train()
+            total_training_loss = 0
+            total_training_split_loss = np.zeros(4)
+            num_batches = 0
+            validation_loss = 0
+            validation_batch = 0
 
+            for feature, label in trainset_loader:
+                # preparing batch data
+                print("Preparing feature and label in batches...")
+                input_tensor = feature.to(self.device)
+                label = label.to(self.device)
+                onset_label = label[:, 0]
+                offset_label = label[:, 1]
+                octave_label = label[:, 2].type(torch.LongTensor).to(self.device)
+                pitch_label = label[:, 3].type(torch.LongTensor).to(self.device)
+
+                # print("\nOnset Label\n")
+                # print(onset_label)
+                # print("\nOffset Label\n")
+                # print(offset_label)
+                # print("\nOctave Label\n")
+                # print(octave_label)
+                # print("\nPitch Label\n")
+                # print(pitch_label)
+
+                # forward pass
+                print("Forward passing...")
+                prediction = self.model(input_tensor)
+
+                # loss computing
+                print("Computing losses...")
+                onset_loss = onset_criterion(prediction[0], onset_label)
+                offset_loss = offset_criterion(prediction[1], offset_label)
+                octave_loss = octave_criterion(prediction[2], octave_label)
+                pitch_loss = pitch_criterion(prediction[3], pitch_label)
+
+                # backward pass
+                print("Back propagation...")
+                optimizer.zero_grad()
+                onset_loss.backward(retain_graph=True)
+                offset_loss.backward(retain_graph=True)
+                octave_loss.backward(retain_graph=True)
+                pitch_loss.backward()
+                optimizer.step()
+
+                # print loss
+                print("Running losses...")
+                num_batches += 1
+                total_training_loss += onset_loss.detach().item() + offset_loss.detach().item() + octave_loss.detach().item() + pitch_loss.detach().item()
+                print("Batch no.: " + str(num_batches))
+                
+            self.model.eval()
+
+            with torch.no_grad():
+                for feature, label in validset_loader:
+                    # preparing batch data
+                    print("Preparing validation set feature and label in batches...")
+                    input_tensor = feature.to(self.device)
+                    label = label.to(self.device)
+
+                    onset_label = label[:, 0]
+                    offset_label = label[:, 1]
+                    octave_label = label[:, 2].type(torch.LongTensor).to(self.device)
+                    pitch_label = label[:, 3].type(torch.LongTensor).to(self.device)
+
+                    # forward pass
+                    print("Forward passing the validation set...")
+                    prediction = self.model(input_tensor)
+
+                    # loss computing
+                    print("Computing losses of the validation set...")
+                    onset_loss = onset_criterion(prediction[0], onset_label)
+                    offset_loss = offset_criterion(prediction[1], offset_label)
+                    octave_loss = octave_criterion(prediction[2], octave_label)
+                    pitch_loss = pitch_criterion(prediction[3], pitch_label)
+
+                    print("Running losses of validation set...")
+                    validation_loss += onset_loss.detach().item() + offset_loss.detach().item() + octave_loss.detach().item() + pitch_loss.detach().item()
+                    validation_batch += 1
+                    print("Validation batch no.: " + str(validation_batch))
+
+            total_validation_loss = validation_loss/validation_batch
+            total_loss = total_training_loss/num_batches
+
+            elapsed_time = time.time() - start_time
+            if epoch % 1 == 0 : 
+                print('\nepoch=',epoch, '\t time=', elapsed_time,
+                    '\t loss=', total_loss, '\t validation loss=', total_validation_loss)
+            
+            train_msg += "This is the no." + str(epoch) + " epoch with training loss = " + str(total_loss) + "(in " + str(elapsed_time) + ")"
+            validate_msg += "This is the no." + str(epoch) + " epoch with validation loss = " + str(total_validation_loss) + "(in " + str(elapsed_time) + ")"
+            
+            if total_validation_loss < best_model:
+                best_model = total_validation_loss
+                best_model_id = epoch
+                model_path = 'model_{}'.format(epoch)
+                torch.save(save_model_dir, model_path)
+                print('\nBest model loss=' + str(best_model))
+             
+        print('Training done in {:.1f} minutes.'.format((time.time()-start_time)/60))
+        print("this is the msg generated from the training loop: \n")
+        print(train_msg)
+        print("\nthis is the msg generated from the validation loop: \n")
+        print(validate_msg)
+        return best_model_id
 
     def parse_frame_info(self, frame_info, onset_thres, offset_thres):
         """Parse frame info [(onset_probs, offset_probs, note number)...] into desired label format."""
@@ -274,9 +325,5 @@ if __name__ == '__main__':
     # Train and Validation
     best_model_id = ast_model.fit(args, learning_params)
     print("Best Model ID: ", best_model_id)
-    
-    
+        
 
-
-
-    
