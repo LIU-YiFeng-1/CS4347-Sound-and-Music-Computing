@@ -190,8 +190,9 @@ class AST_Model:
             if total_validation_loss < best_model:
                 best_model = total_validation_loss
                 best_model_id = epoch
-                model_path = 'model_{}'.format(epoch)
-                torch.save(save_model_dir, model_path)
+                model_name = 'model_{}'.format(epoch)
+                model_path = os.path.join(save_model_dir, model_name) 
+                torch.save(self.model.state_dict(), model_path)
                 print('\nBest model loss=' + str(best_model))
              
         print('Training done in {:.1f} minutes.'.format((time.time()-start_time)/60))
